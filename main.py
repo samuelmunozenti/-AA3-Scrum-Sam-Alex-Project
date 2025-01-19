@@ -2,6 +2,8 @@ from scapy.all import sniff, conf, get_if_list, IP, TCP, UDP
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
+from flask import Flask, render_template, jsonify
+import threading
 
 # Configuración del logger para registrar eventos en un archivo
 logging.basicConfig(
@@ -15,10 +17,22 @@ logging.basicConfig(
 connection_tracker = defaultdict(list)
 port_scan_tracker = defaultdict(set)  # Rastrear escaneos de puertos
 syn_flood_tracker = defaultdict(int)  # Contador para posibles ataques SYN Flood
+traffic_stats = []  # Lista para estadísticas en tiempo real
 
 alert_threshold = 10  # Número de paquetes desde una misma IP en un intervalo
 time_window = timedelta(seconds=10)  # Ventana de tiempo para análisis
 syn_flood_threshold = 50  # Umbral de paquetes SYN en un tiempo corto
+
+# Flask App para el panel de control
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/stats")
+def stats():
+    return jsonify(traffic_stats)
 
 
 def generate_alert(alert_type, src_ip, details):
@@ -31,6 +45,7 @@ def generate_alert(alert_type, src_ip, details):
     )
     logging.warning(alert_message)
     print(alert_message)
+    traffic_stats.append({"tipo": alert_type, "ip": src_ip, "timestamp": timestamp, "detalles": details})
 
 
 def detect_anomalies(src_ip, timestamp):
@@ -145,6 +160,13 @@ def start_sniffing(interface):
         print(f"Error al iniciar la captura: {e}")
 
 
+def run_flask():
+    """
+    Ejecuta la aplicación Flask en un hilo separado.
+    """
+    app.run(host="0.0.0.0", port=5000, debug=False)
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -173,7 +195,13 @@ if __name__ == "__main__":
     else:
         selected_interface = args.interface
 
+    # Iniciar Flask en un hilo separado
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
     # Iniciar la captura en la interfaz seleccionada
     start_sniffing(selected_interface)
+
 
 
