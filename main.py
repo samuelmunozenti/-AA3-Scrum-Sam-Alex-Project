@@ -21,6 +21,18 @@ time_window = timedelta(seconds=10)  # Ventana de tiempo para análisis
 syn_flood_threshold = 50  # Umbral de paquetes SYN en un tiempo corto
 
 
+def generate_alert(alert_type, src_ip, details):
+    """
+    Genera una alerta detallada con tipo de ataque, IP de origen y detalles adicionales.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    alert_message = (
+        f"[ALERTA] Tipo: {alert_type} | IP Origen: {src_ip} | Timestamp: {timestamp} | Detalles: {details}"
+    )
+    logging.warning(alert_message)
+    print(alert_message)
+
+
 def detect_anomalies(src_ip, timestamp):
     """
     Detecta patrones anómalos como múltiples solicitudes desde la misma IP.
@@ -37,9 +49,8 @@ def detect_anomalies(src_ip, timestamp):
 
     # Verificar si supera el umbral
     if len(recent_timestamps) > alert_threshold:
-        alert_message = f"[ALERTA] Patrón anómalo detectado: {len(recent_timestamps)} solicitudes desde {src_ip} en los últimos {time_window.seconds} segundos."
-        logging.warning(alert_message)
-        print(alert_message)
+        details = f"{len(recent_timestamps)} solicitudes en los últimos {time_window.seconds} segundos"
+        generate_alert("Patrón anómalo", src_ip, details)
 
 
 def detect_port_scan(src_ip, dst_port):
@@ -49,9 +60,8 @@ def detect_port_scan(src_ip, dst_port):
     port_scan_tracker[src_ip].add(dst_port)
 
     if len(port_scan_tracker[src_ip]) > 5:  # Umbral para detección de escaneo
-        alert_message = f"[ALERTA] Escaneo de puertos detectado desde {src_ip}: {len(port_scan_tracker[src_ip])} puertos escaneados."
-        logging.warning(alert_message)
-        print(alert_message)
+        details = f"{len(port_scan_tracker[src_ip])} puertos escaneados"
+        generate_alert("Escaneo de puertos", src_ip, details)
 
 
 def detect_syn_flood(src_ip, flag):
@@ -62,9 +72,8 @@ def detect_syn_flood(src_ip, flag):
         syn_flood_tracker[src_ip] += 1
 
         if syn_flood_tracker[src_ip] > syn_flood_threshold:
-            alert_message = f"[ALERTA] Posible ataque SYN Flood detectado desde {src_ip}: {syn_flood_tracker[src_ip]} paquetes SYN."
-            logging.warning(alert_message)
-            print(alert_message)
+            details = f"{syn_flood_tracker[src_ip]} paquetes SYN detectados"
+            generate_alert("SYN Flood", src_ip, details)
 
 
 def packet_callback(packet):
@@ -166,4 +175,5 @@ if __name__ == "__main__":
 
     # Iniciar la captura en la interfaz seleccionada
     start_sniffing(selected_interface)
+
 
