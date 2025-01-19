@@ -13,8 +13,13 @@ logging.basicConfig(
 
 # Diccionario para rastrear conexiones por IP
 connection_tracker = defaultdict(list)
+port_scan_tracker = defaultdict(set)  # Rastrear escaneos de puertos
+syn_flood_tracker = defaultdict(int)  # Contador para posibles ataques SYN Flood
+
 alert_threshold = 10  # Número de paquetes desde una misma IP en un intervalo
 time_window = timedelta(seconds=10)  # Ventana de tiempo para análisis
+syn_flood_threshold = 50  # Umbral de paquetes SYN en un tiempo corto
+
 
 def detect_anomalies(src_ip, timestamp):
     """
@@ -36,6 +41,32 @@ def detect_anomalies(src_ip, timestamp):
         logging.warning(alert_message)
         print(alert_message)
 
+
+def detect_port_scan(src_ip, dst_port):
+    """
+    Detecta patrones de escaneo de puertos desde una misma IP.
+    """
+    port_scan_tracker[src_ip].add(dst_port)
+
+    if len(port_scan_tracker[src_ip]) > 5:  # Umbral para detección de escaneo
+        alert_message = f"[ALERTA] Escaneo de puertos detectado desde {src_ip}: {len(port_scan_tracker[src_ip])} puertos escaneados."
+        logging.warning(alert_message)
+        print(alert_message)
+
+
+def detect_syn_flood(src_ip, flag):
+    """
+    Detecta patrones de SYN Flood basados en paquetes SYN repetidos.
+    """
+    if flag == 0x02:  # Verifica si el paquete tiene solo la bandera SYN activa
+        syn_flood_tracker[src_ip] += 1
+
+        if syn_flood_tracker[src_ip] > syn_flood_threshold:
+            alert_message = f"[ALERTA] Posible ataque SYN Flood detectado desde {src_ip}: {syn_flood_tracker[src_ip]} paquetes SYN."
+            logging.warning(alert_message)
+            print(alert_message)
+
+
 def packet_callback(packet):
     """
     Procesa cada paquete capturado y extrae metadatos clave.
@@ -53,6 +84,11 @@ def packet_callback(packet):
                 src_port = packet[TCP].sport
                 dst_port = packet[TCP].dport
                 protocol_name = "TCP"
+                tcp_flags = packet[TCP].flags
+
+                # Detectar SYN Flood
+                detect_syn_flood(src_ip, tcp_flags)
+
             elif UDP in packet:
                 src_port = packet[UDP].sport
                 dst_port = packet[UDP].dport
@@ -74,8 +110,13 @@ def packet_callback(packet):
             # Detectar patrones anómalos
             detect_anomalies(src_ip, timestamp)
 
+            # Detectar escaneo de puertos
+            if dst_port != "N/A":
+                detect_port_scan(src_ip, dst_port)
+
     except Exception as e:
         logging.error(f"Error procesando paquete: {e}")
+
 
 def start_sniffing(interface):
     """
@@ -93,6 +134,7 @@ def start_sniffing(interface):
     except Exception as e:
         logging.error(f"Error al iniciar la captura: {e}")
         print(f"Error al iniciar la captura: {e}")
+
 
 if __name__ == "__main__":
     import argparse
@@ -124,3 +166,4 @@ if __name__ == "__main__":
 
     # Iniciar la captura en la interfaz seleccionada
     start_sniffing(selected_interface)
+
