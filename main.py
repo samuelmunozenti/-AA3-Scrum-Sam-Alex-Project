@@ -1,4 +1,4 @@
-from scapy.all import sniff, IP, TCP, UDP
+from scapy.all import sniff, conf, get_if_list, IP, TCP, UDP
 import logging
 from datetime import datetime
 
@@ -9,6 +9,16 @@ logging.basicConfig(
     format="%(asctime)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
+
+def list_interfaces():
+    """
+    Lista todas las interfaces de red disponibles en el sistema.
+    """
+    print("Interfaces de red disponibles:")
+    interfaces = get_if_list()
+    for idx, iface in enumerate(interfaces):
+        print(f"{idx + 1}. {iface}")
+    return interfaces
 
 def packet_callback(packet):
     """
@@ -60,6 +70,9 @@ def start_sniffing(interface):
     except PermissionError:
         logging.error("Permisos insuficientes para capturar paquetes. Ejecuta como administrador.")
         print("Error: Permisos insuficientes. Por favor, ejecuta este script como administrador.")
+    except Exception as e:
+        logging.error(f"Error al iniciar la captura: {e}")
+        print(f"Error al iniciar la captura: {e}")
 
 if __name__ == "__main__":
     import argparse
@@ -68,11 +81,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sistema de Detección de Intrusiones (IDS) - Captura de paquetes")
     parser.add_argument(
         "--interface",
-        required=True,
-        help="Interfaz de red donde se capturarán los paquetes (e.g., eth0, wlan0)"
+        help="Interfaz de red donde se capturarán los paquetes (e.g., eth0, wlan0). Si no se especifica, se solicitará al usuario elegir una.",
     )
 
     args = parser.parse_args()
 
-    # Iniciar la captura en la interfaz especificada
-    start_sniffing(args.interface)
+    # Listar interfaces si no se especifica una
+    if not args.interface:
+        interfaces = list_interfaces()
+        selected_index = int(input("Selecciona el número de la interfaz que deseas monitorizar: ")) - 1
+
+        if selected_index < 0 or selected_index >= len(interfaces):
+            print("Selección inválida. Finalizando el programa.")
+            exit(1)
+
+        selected_interface = interfaces[selected_index]
+    else:
+        selected_interface = args.interface
+
+    # Iniciar la captura en la interfaz seleccionada
+    start_sniffing(selected_interface)
